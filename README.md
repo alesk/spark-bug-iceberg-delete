@@ -28,6 +28,19 @@ java.lang.NullPointerException: Cannot invoke "org.apache.spark.unsafe.types.UTF
 There is a workaround to this bug. Instead of using the `MERGE INTO ... WHEN MATCHED THEN DELETE` statement, you can use
 the `DELETE FROM ... WHERE EXISTS` statement to achieve the same functionality without encountering the bug.
 
+## Running on a Different Spark/Iceberg Version
+
+If you want to run the code on different spark configuration, you can use the following command:
+
+In `run.sh` change the line 7 to install the different version of pyspark, i.e. `pyspark==3.3.2`
+
+In min_reproduce, change the line 18 installing different version of iceberg runtime, for example
+
+```
+'spark.jars.packages': 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.0'
+```
+
+
 ## Repository Contents
 
 The repository contains the following files:
