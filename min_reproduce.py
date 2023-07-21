@@ -24,7 +24,7 @@ def get_spark_session(derby_dir, warehouse_dir):
         'spark.driver.host': 'localhost',
         'spark.driver.memory': '512m',
         'spark.sql.shuffle.partitions': '1',
-        'spark.default.parallelism': '1',  # This configuration causes the bug
+        'spark.default.parallelism': '200',
         'spark.rdd.compress': False,
         'spark.shuffle.compress': False,
         'spark.ui.enabled': False,
@@ -32,7 +32,9 @@ def get_spark_session(derby_dir, warehouse_dir):
     }
 
     conf = pyspark.SparkConf().setAll(list(conf_dict.items()))
-    return pyspark.sql.SparkSession.builder.config(conf=conf).getOrCreate()
+    spark = pyspark.sql.SparkSession.builder.config(conf=conf).getOrCreate()
+    spark.sparkContext.setLogLevel('ERROR')
+    return spark
 
 def reproduce_bug(spark):
     """
@@ -42,20 +44,22 @@ def reproduce_bug(spark):
         spark (pyspark.sql.SparkSession): The Spark session.
     """
     # Create a Spark DataFrame with a nullable column
-    dst_df = spark.createDataFrame([(1, 'm'), (3, None), (1, None)], ['id', 'nullable_string'])
+    dst_df = spark.createDataFrame([(1, 'm'), (3, None), (1, None), (2, None)], ['id', 'nullable_string'])
 
     # Create another DataFrame with ids to be deleted
     remove_list_df = spark.createDataFrame([(1, )], ['id'])
 
     remove_list_df.createOrReplaceTempView('remove_list')
-    dst_df.writeTo('iceberg.default.dst').createOrReplace()
+    dst_df.orderBy('id').writeTo('iceberg.default.dst').createOrReplace()
 
-    # Delete all rows where id is included in remove_list_df
-    # If one of the rows has a column with null, an exception is thrown
+    # Remove all rows in which the 'id' is found within the 'remove_list_df'.
+    # If one of the remaining rows has a column with null, an exception is thrown
     #
     #   java.lang.NullPointerException: Cannot invoke "org.apache.spark.unsafe.types.UTF8String.getBaseObject()" because "input" is null
     #
-    # This bug is not reproducible if spark.default.parallelism is set to 2 or higher
+    # It's essential to note that the dataframe needs to be sorted before being written to the iceberg table in order
+    # to trigger the bug. If the dataframe is not sorted, the bug does not occur if the 'spark.default.parallelism' is
+    # set to high enough value.
 
     delete_sql = """
     MERGE INTO iceberg.default.dst AS a
@@ -65,13 +69,14 @@ def reproduce_bug(spark):
     WHEN MATCHED THEN DELETE
         """
 
-    # This works even with spark.default.parallelism = 1
-
+    # This way, we can avoid triggering the bug when deleting rows
+    #
     # delete_sql = """
-    #    DELETE FROM iceberg.default.dst WHERE EXISTS (select 1 from remove_list where remove_list.a = dst.a)
+    #    DELETE FROM iceberg.default.dst WHERE EXISTS (select 1 from remove_list where remove_list.id = dst.id)
     #    """
 
-    spark.sql(delete_sql).show()
+    spark.sql(delete_sql)
+    spark.sql('SELECT * FROM iceberg.default.dst').show()
 
 def main():
     with tempfile.TemporaryDirectory() as derby_dir:
