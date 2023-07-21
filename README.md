@@ -11,14 +11,13 @@ value in some column. The issue is reproducible only when the `spark.default.par
 - Reproducible with `spark.default.parallelism=1`
 - Works fine with Iceberg 1.3 and Spark 3.3.2
 - Bug is caused by the `MERGE INTO ... WHEN MATCHED THEN DELETE` statement deleting rows from the Iceberg table.
-- Bug is manifested as an exception thrown by the Spark job 
+- Bug is manifested as an exception thrown by the Spark job
 
 ```text
 java.lang.NullPointerException: Cannot invoke "org.apache.spark.unsafe.types.UTF8String.getBaseObject()" because "input" is null
 ```
 
 ## Bug Reproduction
-
 
 1. Make sure you have python 3.7+ installed.
 2. Run the provided script `run.sh` to run the Spark job with the bug.
@@ -40,7 +39,6 @@ In min_reproduce, change the line 18 installing different version of iceberg run
 'spark.jars.packages': 'org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.0'
 ```
 
-
 ## Repository Contents
 
 The repository contains the following files:
@@ -49,3 +47,7 @@ The repository contains the following files:
 2. `run.sh`: Bash script to execute the bug reproduction.
 4. `README.md`: This README file.
 
+## Actions taken
+
+An [issue #8126](https://github.com/apache/iceberg/issues/8126) has been submitted to the Apache Iceberg's GitHub
+repository.
